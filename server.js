@@ -38,102 +38,97 @@ app.get("/main.html", (req, res) => {
 
 // LOGIN + DATA FETCH
 app.post("/data", async (req, res) => {
+    // 1. Setup context with a real user agent to bypass bot detection
     const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 720 }
     });
+    
     const page = await context.newPage();
-
     const { username, password } = req.body;
     let authHeaders = null;
 
+    // Listen for requests to grab headers
     page.on("request", request => {
         if (request.url().includes("api/")) {
-            authHeaders = request.headers();
+            const headers = request.headers();
+            // Ensure we get a header that actually has a bearer token or session cookie
+            if (headers['authorization'] || headers['cookie']) {
+                authHeaders = headers;
+            }
         }
     });
 
     try {
-        await page.goto("https://family.e-klase.lv/");
+        // 2. Go to login page and wait until it's fully loaded
+        await page.goto("https://family.e-klase.lv/", { waitUntil: 'networkidle', timeout: 60000 });
 
         await page.fill("#username", username);
         await page.fill("#password", password);
-        await page.click("#login-button");
-        try {
-            // 1. Give it a few seconds to successfully redirect
-            await page.waitForURL(/\/home/i, { timeout: 5000, waitUntil: 'domcontentloaded' });
-            
-            // Continue with data fetching...
-            console.log("Login Success!");
-            
-        } catch (e) {
-            // 2. If we DIDN'T redirect, check if an error message is visible
-            // We use a locator here with a short timeout
-            const errorLocator = page.locator('#error-message');
-            
-            // Check if the element exists and has text
-            const messageText = await errorLocator.textContent().catch(() => null);
+        
+        // 3. Trigger login and wait for the redirect to finish completely
+        await Promise.all([
+            page.click("#login-button"),
+            // Wait for the URL to change to home AND for the network to stop being busy
+            page.waitForURL(/\/home/i, { waitUntil: 'networkidle', timeout: 30000 })
+        ]);
 
-            if (messageText && messageText.trim().length > 0) {
-                console.log("Login failed:", messageText);
-                await context.close();
-                return res.status(401).json({ 
-                    success: false, 
-                    error: messageText.trim() 
-                });
-            }
+        console.log("Login Success! Waiting for headers...");
 
-            // 3. If no error message was found but we still didn't redirect
-            await context.close();
-            return res.status(500).json({ error: "Login timed out or failed." });
+        // 4. Critical: Wait a moment to ensure an API call happens and we catch the headers
+        // Sometimes the home page takes a second to trigger its first background fetch
+        let retries = 0;
+        while (!authHeaders && retries < 10) {
+            await page.waitForTimeout(500); 
+            retries++;
         }
 
-        await page.waitForURL(/\/home/i, { waitUntil: "networkidle" });
+        if (!authHeaders) {
+            throw new Error("Could not capture authentication headers.");
+        }
 
+        // 5. Date calculation logic
         const now = new Date();
         const currentYear = now.getFullYear();
         const isSecondSemester = (now.getMonth() + 1) < 9;
+        const fromDate = isSecondSemester ? `${currentYear - 1}-09-01` : `${currentYear}-09-01`;
+        const toDate = isSecondSemester ? `${currentYear}-08-31` : `${currentYear + 1}-08-31`;
 
-        const fromDate = isSecondSemester
-            ? `${currentYear - 1}-09-01`
-            : `${currentYear}-09-01`;
+        // 6. Execute data fetching inside the browser context
+        const data = await page.evaluate(async ({ h, from, to }) => {
+            const fetchApi = async (url) => {
+                const res = await fetch(url, { headers: h });
+                return res.ok ? await res.json() : null;
+            };
 
-        const toDate = isSecondSemester
-            ? `${currentYear}-08-31`
-            : `${currentYear + 1}-08-31`;
-
-        let data = null;
-
-        if (authHeaders) {
-            data = await page.evaluate(async ({ h, from, to }) => {
-                const [dRes, tRes, sRes, nRes, enRes] = await Promise.all([
-                    fetch(`/api/diary?from=${from}&to=${to}`, { headers: h }),
-                    fetch("/api/test-schedules", { headers: h }),
-                    fetch("/api/evaluations/summary", { headers: h }),
-                    fetch("/api/news", { headers: h }),
-                    fetch(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`, { headers: h }),
-                ]);
-
-                return {
-                    diary: dRes.ok ? await dRes.json() : null,
-                    tests: tRes.ok ? await tRes.json() : null,
-                    summary: sRes.ok ? await sRes.json() : null,
-                    news: nRes.ok ? await nRes.json() : null,
-                    evalNews: enRes.ok ? await enRes.json() : null
-                };
-            }, { h: authHeaders, from: fromDate, to: toDate });
-        }
-
-        await context.close();
+            return await Promise.all([
+                fetchApi(`/api/diary?from=${from}&to=${to}`),
+                fetchApi("/api/test-schedules"),
+                fetchApi("/api/evaluations/summary"),
+                fetchApi("/api/news"),
+                fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`)
+            ]).then(([diary, tests, summary, news, evalNews]) => ({
+                diary, tests, summary, news, evalNews
+            }));
+        }, { h: authHeaders, from: fromDate, to: toDate });
 
         res.json(data);
 
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Login failed");
+        console.error("Error during scraping:", err.message);
+        
+        // Check for specific login error messages before giving up
+        const errorMsg = await page.locator('#error-message').textContent().catch(() => null);
+        
+        res.status(err.message.includes("timeout") ? 504 : 500).json({
+            success: false,
+            error: errorMsg || err.message || "Internal Server Error"
+        });
+    } finally {
+        // 7. ALWAYS close context to free up Render's limited RAM
+        await context.close();
     }
 });
-
 app.listen(port, () => {
     console.log("Server running on http://localhost:" + port);
 });
