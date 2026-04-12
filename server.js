@@ -1,5 +1,6 @@
-process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
-
+if (process.env.RENDER) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
+}
 const express = require("express");
 const { chromium } = require("playwright");
 const path = require("path");
@@ -14,11 +15,12 @@ let browser;
 
 async function start() {
     browser = await chromium.launch({
-        headless: true, // Crucial for server environments
+        headless: true,
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage' // Helps with memory limits on Render
+            '--disable-dev-shm-usage', // Vital for Render's 512MB RAM
+            '--disable-blink-features=AutomationControlled' // Hides the "automated" flag
         ]
     });
 }
@@ -36,7 +38,10 @@ app.get("/main.html", (req, res) => {
 
 // LOGIN + DATA FETCH
 app.post("/data", async (req, res) => {
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 720 }
+    });
     const page = await context.newPage();
 
     const { username, password } = req.body;
