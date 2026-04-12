@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "express": "^5.2.1",
+    "playwright": "^1.59.1"
+  },
+ "scripts": {
+    "start": "node server.js"
+  }
+}
