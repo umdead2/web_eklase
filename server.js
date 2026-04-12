@@ -13,7 +13,14 @@ app.use(express.static(__dirname));
 let browser;
 
 async function start() {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+        headless: true, // Crucial for server environments
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage' // Helps with memory limits on Render
+        ]
+    });
 }
 start();
 
