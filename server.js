@@ -64,8 +64,9 @@ app.post("/data", async (req, res) => {
 
     try {
         console.log(`Attempting login for: ${username}`);
-        await page.goto("https://family.e-klase.lv/", { waitUntil: 'networkidle', timeout: 60000 });
-
+        await page.goto("https://family.e-klase.lv/", { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForSelector("#username", { timeout: 60000 });
+        
         await page.fill("#username", username);
         await page.fill("#password", password);
         
