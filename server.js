@@ -137,6 +137,6 @@ app.post("/data", async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+app.listen(5000, "0.0.0.0", () => {
+  console.log("Server running");
 });
