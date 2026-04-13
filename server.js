@@ -2,6 +2,10 @@ if (process.env.RENDER) {
     process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
 }
 
+if (process.env.DOCKER || !process.env.RENDER) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
+}
+
 const express = require("express");
 const { chromium } = require("playwright");
 const path = require("path");
@@ -13,25 +17,58 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 let browser;
+let browserLaunchPromise = null;
 
 // =========================
-// START BROWSER (FAST)
+// BROWSER LAUNCH WITH RETRY
 // =========================
-async function start() {
-    browser = await chromium.launch({
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled'
-        ]
-    });
+async function launchBrowser() {
+    if (browser) return browser;
+    
+    if (browserLaunchPromise) return browserLaunchPromise;
 
-    console.log("Browser launched successfully");
+    browserLaunchPromise = (async () => {
+        try {
+            console.log("🚀 Launching browser...");
+            browser = await chromium.launch({
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-gpu',
+                    '--disable-web-resources',
+                    '--no-default-browser-check',
+                    '--no-pings'
+                ]
+            });
+            
+            console.log("✅ Browser launched successfully");
+            
+            // Monitor browser crash
+            browser.on('disconnected', () => {
+                console.warn("⚠️ Browser disconnected! Will restart on next request.");
+                browser = null;
+                browserLaunchPromise = null;
+            });
+            
+            return browser;
+        } catch (err) {
+            console.error("❌ Browser launch failed:", err.message);
+            browserLaunchPromise = null;
+            throw err;
+        }
+    })();
+
+    return browserLaunchPromise;
 }
 
-start();
+// Initial launch
+launchBrowser().catch(err => {
+    console.error("Initial browser launch failed:", err.message);
+    process.exit(1);
+});
 
 // =========================
 // ROUTES
@@ -44,137 +81,187 @@ app.get("/main.html", (req, res) => {
     res.sendFile(path.join(__dirname, "main.html"));
 });
 
+// Health check
+app.get("/health", async (req, res) => {
+    try {
+        const b = await launchBrowser();
+        res.json({ status: "ok", browser: !!b });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+});
+
 // =========================
 // LOGIN + DATA
 // =========================
 app.post("/data", async (req, res) => {
     const { username, password } = req.body;
-
-    const context = await browser.newContext({
-        userAgent:
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
-        viewport: { width: 1280, height: 720 }
-    });
-
-    const page = await context.newPage();
-
-    let authHeaders = null;
-
-    // =========================
-    // HEADER SNIFFER (KEEP)
-    // =========================
-    page.on("request", (request) => {
-        const url = request.url();
-
-        if (url.includes("/api/diary") || url.includes("/api/news")) {
-            const headers = request.headers();
-
-            if (!authHeaders && (headers.cookie || headers.authorization)) {
-                authHeaders = headers;
-            }
-        }
-    });
+    let context = null;
+    let page = null;
 
     try {
-        console.log(`Logging in: ${username}`);
+        // Ensure browser is running
+        const b = await launchBrowser();
+        if (!b) throw new Error("Browser failed to launch");
 
-        // =========================
-        // LOGIN (FAST)
-        // =========================
-        await page.goto("https://family.e-klase.lv/", {
-            waitUntil: "domcontentloaded"
+        console.log(`\n📝 [${new Date().toISOString()}] Login attempt: ${username}`);
+
+        context = await b.newContext({
+            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
+            viewport: { width: 1280, height: 720 }
         });
 
-        await page.waitForSelector("#username", { timeout: 30000 });
+        page = await context.newPage();
+        let authHeaders = null;
 
+        // =========================
+        // CAPTURE AUTH HEADERS
+        // =========================
+        page.on("request", (request) => {
+            const url = request.url();
+            if (url.includes("/api/diary") || url.includes("/api/news")) {
+                const headers = request.headers();
+                if (!authHeaders && (headers.cookie || headers.authorization)) {
+                    authHeaders = headers;
+                    console.log("✅ Auth headers captured");
+                }
+            }
+        });
+
+        // =========================
+        // NAVIGATE TO LOGIN PAGE
+        // =========================
+        try {
+            await page.goto("https://family.e-klase.lv/", {
+                waitUntil: "domcontentloaded",
+                timeout: 50000
+            });
+            console.log("✅ Page loaded");
+        } catch (err) {
+            throw new Error(`Failed to load login page: ${err.message}`);
+        }
+
+        // =========================
+        // WAIT FOR FORM
+        // =========================
+        try {
+            await page.waitForSelector("#username", { timeout: 50000 });
+            console.log("✅ Login form found");
+        } catch (err) {
+            const pageTitle = await page.title().catch(() => "unknown");
+            const pageUrl = page.url();
+            console.error(`❌ Form not found. Title: ${pageTitle}, URL: ${pageUrl}`);
+            throw new Error("Login form elements not found on page");
+        }
+
+        // =========================
+        // FILL & SUBMIT FORM
+        // =========================
         await page.fill("#username", username);
         await page.fill("#password", password);
+        console.log("✅ Credentials entered");
 
         await page.click("#login-button");
+        console.log("✅ Login button clicked");
 
         // =========================
-        // FAST STABILIZATION WAIT (IMPORTANT)
+        // WAIT FOR REDIRECT
         // =========================
-        await Promise.race([
-            page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {}),
-            page.waitForTimeout(1500)
-        ]);
+        try {
+            await Promise.race([
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 40000 }),
+                page.waitForTimeout(3000)
+            ]);
+            console.log("✅ Navigation complete");
+        } catch (err) {
+            console.warn("⚠️ Navigation timeout (may be normal)");
+        }
 
-        // small buffer ONLY (no heavy waits)
-        await page.waitForTimeout(800);
+        await page.waitForTimeout(1500);
 
         // =========================
-        // FORCE API TRIGGER (LIGHT)
+        // TRIGGER API CALLS
         // =========================
         await page.evaluate(() => {
             fetch("/api/news").catch(() => {});
+            fetch("/api/diary").catch(() => {});
         }).catch(() => {});
 
-        // wait for sniffing only
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(1000);
 
+        // =========================
+        // VERIFY AUTH HEADERS
+        // =========================
         if (!authHeaders) {
-            await page.waitForTimeout(1200);
-
+            console.warn("⚠️ Auth headers not captured, waiting...");
+            await page.waitForTimeout(2000);
             if (!authHeaders) {
-                throw new Error("Failed to capture auth headers");
+                throw new Error("Could not capture authentication headers");
             }
         }
 
-        console.log("Auth headers captured");
-
         // =========================
-        // DATE LOGIC
+        // CALCULATE DATE RANGE
         // =========================
         const now = new Date();
         const year = now.getFullYear();
-        const isSecondSemester = (now.getMonth() + 1) < 9;
+        const month = now.getMonth() + 1;
+        
+        // School year runs Sept-Aug
+        const isSecondSemester = month < 9;
+        const fromDate = isSecondSemester ? `${year - 1}-09-01` : `${year}-09-01`;
+        const toDate = isSecondSemester ? `${year}-08-31` : `${year + 1}-08-31`;
 
-        const fromDate = isSecondSemester
-            ? `${year - 1}-09-01`
-            : `${year}-09-01`;
-
-        const toDate = isSecondSemester
-            ? `${year}-08-31`
-            : `${year + 1}-08-31`;
+        console.log(`📅 Date range: ${fromDate} to ${toDate}`);
 
         // =========================
-        // DATA FETCH (INSIDE BROWSER SESSION)
+        // FETCH ALL DATA
         // =========================
         const data = await page.evaluate(async ({ h, from, to }) => {
-
-            const fetchApi = async (url) => {
+            const fetchApi = async (url, label) => {
                 try {
-                    const res = await fetch(url, { headers: h });
-                    return res.ok ? await res.json() : null;
-                } catch {
+                    const res = await fetch(url, { 
+                        headers: h,
+                        timeout: 15000 
+                    });
+                    if (!res.ok) {
+                        console.warn(`API ${label} returned ${res.status}`);
+                        return null;
+                    }
+                    return await res.json();
+                } catch (err) {
+                    console.error(`API ${label} failed:`, err.message);
                     return null;
                 }
             };
 
-            const [diary, tests, summary, news, evalNews] = await Promise.all([
-                fetchApi(`/api/diary?from=${from}&to=${to}`),
-                fetchApi(`/api/test-schedules`),
-                fetchApi(`/api/evaluations/summary`),
-                fetchApi(`/api/news`),
-                fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`)
-            ]);
-
-            return { diary, tests, summary, news, evalNews };
+            return await Promise.all([
+                fetchApi(`/api/diary?from=${from}&to=${to}`, "diary"),
+                fetchApi(`/api/test-schedules`, "tests"),
+                fetchApi(`/api/evaluations/summary`, "summary"),
+                fetchApi(`/api/news`, "news"),
+                fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`, "evalNews")
+            ]).then(([diary, tests, summary, news, evalNews]) => ({
+                diary, tests, summary, news, evalNews
+            }));
 
         }, { h: authHeaders, from: fromDate, to: toDate });
 
-        console.log("Data successfully fetched!");
+        console.log("✅ All data fetched successfully!\n");
 
-        res.json({
-            success: true,
-            ...data
-        });
+        res.json({ success: true, ...data });
 
     } catch (err) {
-        console.error("Scraping Error:", err.message);
+        console.error(`\n❌ Error: ${err.message}\n`);
 
-        const errorText = await page.locator("#error-message").textContent().catch(() => null);
+        let errorText = null;
+        try {
+            if (page && !page.isClosed?.()) {
+                errorText = await page.locator("#error-message").textContent().catch(() => null);
+            }
+        } catch (e) {
+            // ignore
+        }
 
         res.status(500).json({
             success: false,
@@ -182,13 +269,26 @@ app.post("/data", async (req, res) => {
         });
 
     } finally {
-        await context.close();
+        try {
+            if (page && !page.isClosed?.()) await page.close();
+            if (context) await context.close();
+        } catch (err) {
+            console.warn("Cleanup warning:", err.message);
+        }
     }
+});
+
+// =========================
+// ERROR HANDLER
+// =========================
+app.use((err, req, res, next) => {
+    console.error("Express error:", err);
+    res.status(500).json({ error: err.message });
 });
 
 // =========================
 // START SERVER
 // =========================
 app.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on port ${port}`);
+    console.log(`\n🌐 Server running on http://0.0.0.0:${port}\n`);
 });
