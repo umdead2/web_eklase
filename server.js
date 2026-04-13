@@ -1,4 +1,3 @@
-// 1. CONDITIONAL BROWSER PATH (Fixes the "Executable doesn't exist" on your PC)
 if (process.env.RENDER) {
     process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
 }
@@ -15,21 +14,28 @@ app.use(express.static(__dirname));
 
 let browser;
 
-// 2. STEALTH BROWSER LAUNCH
+// =========================
+// START BROWSER (FAST)
+// =========================
 async function start() {
     browser = await chromium.launch({
         headless: true,
         args: [
-            '--no-sandbox', 
+            '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled' // Hides bot status
+            '--disable-blink-features=AutomationControlled'
         ]
     });
+
     console.log("Browser launched successfully");
 }
+
 start();
 
+// =========================
+// ROUTES
+// =========================
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "login.html"));
 });
@@ -38,109 +44,151 @@ app.get("/main.html", (req, res) => {
     res.sendFile(path.join(__dirname, "main.html"));
 });
 
-// 3. SECURE LOGIN + DATA FETCH
+// =========================
+// LOGIN + DATA
+// =========================
 app.post("/data", async (req, res) => {
     const { username, password } = req.body;
-    
-    // Create context with a real-world Identity
+
     const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        userAgent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
         viewport: { width: 1280, height: 720 }
     });
 
     const page = await context.newPage();
+
     let authHeaders = null;
 
-    // 4. HEADER SNIFFER (Waits specifically for a valid session header)
-    page.on("request", request => {
+    // =========================
+    // HEADER SNIFFER (KEEP)
+    // =========================
+    page.on("request", (request) => {
         const url = request.url();
-        if (url.includes("api/diary") || url.includes("api/news")) {
+
+        if (url.includes("/api/diary") || url.includes("/api/news")) {
             const headers = request.headers();
-            if (headers['authorization'] || headers['cookie']) {
+
+            if (!authHeaders && (headers.cookie || headers.authorization)) {
                 authHeaders = headers;
             }
         }
     });
 
     try {
-        console.log(`Attempting login for: ${username}`);
-        await page.goto("https://family.e-klase.lv/", { waitUntil: 'domcontentloaded', timeout: 60000 });
-        
-        await page.waitForSelector("#username", { timeout: 60000 });
-        console.log(await page.title());
-        await page.screenshot({ path: "debug.png", fullPage: true });
-        
-        await page.fill("#username", username);
-        await page.fill("#password", password);
-        
-        // 5. CLICK AND WAIT FOR NAVIGATION
-        await Promise.all([
-            page.click("#login-button"),
-            page.waitForURL(/\/home/i, { waitUntil: 'networkidle', timeout: 45000 })
-        ]);
+        console.log(`Logging in: ${username}`);
 
-        // 6. WAIT FOR CONTENT TO ACTUALLY APPEAR (Prevents empty JSON)
-        // We wait for the diary container to exist in the DOM
-        await page.waitForSelector('.lessons-table, .diary-container, #diary-container', { timeout: 15000 }).catch(() => {
-            console.log("Warning: Specific selector not found, proceeding anyway...");
+        // =========================
+        // LOGIN (FAST)
+        // =========================
+        await page.goto("https://family.e-klase.lv/", {
+            waitUntil: "domcontentloaded"
         });
 
-        // Small "settle" time for Render's network
-        await page.waitForTimeout(2000); 
+        await page.waitForSelector("#username", { timeout: 30000 });
+
+        await page.fill("#username", username);
+        await page.fill("#password", password);
+
+        await page.click("#login-button");
+
+        // =========================
+        // FAST STABILIZATION WAIT (IMPORTANT)
+        // =========================
+        await Promise.race([
+            page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {}),
+            page.waitForTimeout(1500)
+        ]);
+
+        // small buffer ONLY (no heavy waits)
+        await page.waitForTimeout(800);
+
+        // =========================
+        // FORCE API TRIGGER (LIGHT)
+        // =========================
+        await page.evaluate(() => {
+            fetch("/api/news").catch(() => {});
+        }).catch(() => {});
+
+        // wait for sniffing only
+        await page.waitForTimeout(500);
 
         if (!authHeaders) {
-            console.log("Headers not caught by listener, attempting manual grab...");
-            // Fallback: try to trigger a small fetch to force a header capture
-            await page.evaluate(() => fetch('/api/news').catch(() => null));
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(1200);
+
+            if (!authHeaders) {
+                throw new Error("Failed to capture auth headers");
+            }
         }
 
-        // Date Logic
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const isSecondSemester = (now.getMonth() + 1) < 9;
-        const fromDate = isSecondSemester ? `${currentYear - 1}-09-01` : `${currentYear}-09-01`;
-        const toDate = isSecondSemester ? `${currentYear}-08-31` : `${currentYear + 1}-08-31`;
+        console.log("Auth headers captured");
 
-        // 7. INTERNAL DATA FETCHING
+        // =========================
+        // DATE LOGIC
+        // =========================
+        const now = new Date();
+        const year = now.getFullYear();
+        const isSecondSemester = (now.getMonth() + 1) < 9;
+
+        const fromDate = isSecondSemester
+            ? `${year - 1}-09-01`
+            : `${year}-09-01`;
+
+        const toDate = isSecondSemester
+            ? `${year}-08-31`
+            : `${year + 1}-08-31`;
+
+        // =========================
+        // DATA FETCH (INSIDE BROWSER SESSION)
+        // =========================
         const data = await page.evaluate(async ({ h, from, to }) => {
+
             const fetchApi = async (url) => {
                 try {
                     const res = await fetch(url, { headers: h });
                     return res.ok ? await res.json() : null;
-                } catch (e) { return null; }
+                } catch {
+                    return null;
+                }
             };
 
             const [diary, tests, summary, news, evalNews] = await Promise.all([
                 fetchApi(`/api/diary?from=${from}&to=${to}`),
-                fetchApi("/api/test-schedules"),
-                fetchApi("/api/evaluations/summary"),
-                fetchApi("/api/news"),
+                fetchApi(`/api/test-schedules`),
+                fetchApi(`/api/evaluations/summary`),
+                fetchApi(`/api/news`),
                 fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`)
             ]);
 
             return { diary, tests, summary, news, evalNews };
+
         }, { h: authHeaders, from: fromDate, to: toDate });
 
         console.log("Data successfully fetched!");
-        res.json(data);
+
+        res.json({
+            success: true,
+            ...data
+        });
 
     } catch (err) {
         console.error("Scraping Error:", err.message);
-        
-        // Check if the page is showing an actual login error
-        const errorText = await page.locator('#error-message').textContent().catch(() => null);
-        
+
+        const errorText = await page.locator("#error-message").textContent().catch(() => null);
+
         res.status(500).json({
             success: false,
-            error: errorText?.trim() || "Login timed out or E-klase blocked the request."
+            error: errorText?.trim() || err.message
         });
+
     } finally {
-        // 8. CRITICAL: Clean up memory
         await context.close();
     }
 });
 
-app.listen(5000, "0.0.0.0", () => {
-  console.log("Server running");
+// =========================
+// START SERVER
+// =========================
+app.listen(port, "0.0.0.0", () => {
+    console.log(`Server running on port ${port}`);
 });
