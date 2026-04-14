@@ -51,9 +51,6 @@ app.post("/data", async (req, res) => {
     });
 
     const page = await context.newPage();
-    
-    // MOVE THIS HERE: Pipe browser logs to your terminal so you can see why it fails
-    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
 
     await page.route('**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2}', route => route.abort());
 
@@ -112,7 +109,8 @@ app.post("/data", async (req, res) => {
                 fetchApi(`/api/test-schedules`),
                 fetchApi(`/api/evaluations/summary`),
                 fetchApi(`/api/news`),
-                fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`)
+                fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`),
+                fetchApi(`api/user`)
             ]);
 
             return {
@@ -120,13 +118,14 @@ app.post("/data", async (req, res) => {
                 tests: results[1],
                 summary: results[2],
                 news: results[3],
-                evalNews: results[4]
+                evalNews: results[4],
+                user: results[5]
             };
         }, { h: authHeaders, from: fromDate, to: toDate });
 
         // FIXED: You were trying to destructure 'data' as an array [diary, tests...] 
         // but 'evaluate' returns an object { diary, tests... }.
-        res.json({ success: true, date: now, ...data });
+        res.json({date: now, ...data });
 
     } catch (err) {
         console.error("Scraping Error:", err.message);

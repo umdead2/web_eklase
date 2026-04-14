@@ -5,25 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eklase</title>
     <link rel="stylesheet" href="main.css">
-    
 </head>
 <body>
+<div class="header-container">
+    <div class="class-title-section">
+        <h1 id="current-class-display"></h1>
+    </div>
+    <div class="search-section">
+        <div class="search-wrapper">
+            <input type="text" id="classSearch" placeholder="Meklēt klasi..." autocomplete="off">
+            <div id="classDropdown" class="dropdown-content"></div>
+        </div>
+    </div>
+</div>
+
+<div id="class-info-container" class="class-info"></div>
+
 <div class="date-controls">
     <button onclick="changeDate(-1)">◀</button>
     <p id="date"></p>
     <button onclick="changeDate(1)">▶</button>
 </div>
+
 <table id="diaryTable">
-    <tr>
-        <td>nr.</td>
-        <td>Prekšmets un telpa</td>
-        <td>Tēma</td>
-        <td>Uzdots</td>
-        <td>Vērtējumi</td>
-    </tr>
+    <thead>
+        <tr>
+            <td>nr.</td>
+            <td>Prekšmets un telpa</td>
+            <td>Tēma</td>
+            <td>Uzdots</td>
+            <td>Vērtējumi</td>
+        </tr>
+    </thead>
+    <tbody id="diaryBody"></tbody>
 </table>
+
+<div id="global-info-container" class="global-info"></div>
 
 
 <script src="main.js"></script>
+
 </body>
 </html>

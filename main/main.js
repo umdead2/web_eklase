@@ -1,6 +1,10 @@
 const data = localStorage.getItem("Data");
 const dateDisplay = document.getElementById("date");
 let currentdate = 0;
+const jsonData = JSON.parse(data);
+const userclass = jsonData.user?.class?.name
+const globalInfo = getChangesForClass("globalInfo");
+
 
 function getCurrentDate(offsetDays = 0) {
   const date = new Date();
@@ -14,6 +18,12 @@ function getCurrentDate(offsetDays = 0) {
 
 document.addEventListener("DOMContentLoaded", function() {
     UpdateDiary(getCurrentDate(currentdate))
+    UpdateChanges(getChangesForClass(userclass))
+
+    document.getElementById('current-class-display').innerHTML = userclass;
+    document.getElementById('global-info-container').innerHTML = cleanHtml(globalInfo);
+    
+
 });
 document.addEventListener("click", function (e) {
   if (!e.target.classList.contains("read-more")) return;
@@ -41,6 +51,16 @@ function stripHtml(html) {
   const div = document.createElement("div");
   div.innerHTML = html;
   return div.textContent || div.innerText || "";
+}
+
+function cleanHtml(html) {
+if (!html) return "";
+    
+    return html
+        .replace(/<p>&nbsp;<\/p>/g, '') // Izdzēš tukšās rindas
+        .replace(/<p>\s*<\/p>/g, '')    // Izdzēš rindkopas bez teksta
+        .replace(/style="[^"]*"/g, '')  // Noņem visus inline stilus (krāsas/izmērus)
+        .replace(/&nbsp;/g, ' ');       // Aizstāj HTML atstarpes ar parastām
 }
 
 function formatText(html, maxLinks = 1) {
@@ -100,7 +120,7 @@ function UpdateDiary(date) {
         return;
     }
     
-    const jsonData = JSON.parse(data);
+    
     const currentDate = date;
     
     let table = document.getElementById("diaryTable");
@@ -137,9 +157,24 @@ function UpdateDiary(date) {
                         newCell2.innerHTML = "--";
                     }
                     const subjectText = lesson?.lessonSubjects?.[0]?.value?.text || "";
+                    const scheduledTests = lesson?.scheduledTests?.[0]?.description;
+                    const scheduledTestsText = scheduledTests?.text || "";
+                    
                     let newCell3 = newRow.insertCell(2);
                     if (lesson) {
-                        newCell3.innerHTML = formatText(subjectText);
+                      const hasscheAttachment = (scheduledTests?.attachments?.length || 0) > 0 || (lesson?.thirdPartyEvents?.length|| 0) > 0;
+                        newCell3.innerHTML = `
+                        ${formatText(subjectText)}
+                        ${formatText(scheduledTestsText)}
+                        ${hasscheAttachment ? `
+                            <div class="attachment-row">
+                            <span>Saite vai fails pieejams e-klasē.</span>
+                            <a href="https://family.e-klase.lv/" target="_blank" class="eklase-btn">
+                                Atvērt
+                            </a>
+                            </div>
+                        ` : ""}
+                    `;
                     } else {
                         newCell3.innerHTML = "--";
                     }
@@ -178,3 +213,104 @@ function UpdateDiary(date) {
     }
     });
 }
+
+
+function getChangesForClass(targetClass) {
+    const body = jsonData.news[0]?.body || "";
+    const parts = body.split(/(<strong>\d+\.[a-z]\s*klase<\/strong>)/i);
+    const globalInfo = parts[0];
+
+    if (targetClass === "globalInfo") {
+        return globalInfo;
+    }
+
+    // Izveidojam drošu meklēšanas shēmu:
+    // ^ sakrīt ar teksta sākumu vai tukšumu pirms tam
+    // \b nodrošina, ka meklējam tieši šo simbolu kombināciju kā atsevišķu vārdu
+    const safeSearchTerm = targetClass.replace(".", "\\.");
+    const classRegex = new RegExp("(^|\\s|>)" + safeSearchTerm + "\\s*klase", "i");
+
+    const classIndex = parts.findIndex((p, index) => 
+        index > 0 && classRegex.test(p)
+    );
+
+    const mentionedInGlobal = classRegex.test(globalInfo);
+
+    if (classIndex !== -1) {
+        let result = parts[classIndex] + parts[classIndex + 1];
+        if (mentionedInGlobal) {
+            result += `<p style="margin-top: 10px; font-style: italic; color: #949ba4;">
+                        Skatīt skolas kopējās izmaiņas (norādītas augšā).
+                       </p>`;
+        }
+        return result;
+    }
+
+    if (mentionedInGlobal) {
+        return `<strong>${targetClass.toUpperCase()} KLASE</strong><br>Skatīt skolas kopējās izmaiņas (norādītas augšā).`;
+    }
+
+    return "Nav izmaiņu šajai klasei";
+}
+
+function UpdateChanges(info) {
+  document.getElementById('class-info-container').innerHTML = info;
+}
+
+const classes = [
+    "1.g", "1.u", "1.l", "1.b", "1.e", "1.n",
+    "2.g", "2.u", "2.l", "2.b", "2.e", "2.n",
+    "3.g", "3.u", "3.l", "3.b", "3.e", "3.n",
+    "4.g", "4.u", "4.l", "4.b", "4.e", "4.n",
+    "5.g", "5.u", "5.l", "5.b", "5.e", "5.n",
+    "6.g", "6.u", "6.l", "6.b", "6.e", "6.n",
+    "7.g", "7.u", "7.l", "7.b", "7.e", "7.n",
+    "8.g", "8.u", "8.l", "8.b", "8.e", "8.n",
+    "9.g", "9.u", "9.l", "9.b", "9.e", "9.n",
+    "10.g","10.bg", "11.g",
+
+];
+const dropdown = document.getElementById("classDropdown");
+const input = document.getElementById("classSearch");
+const displayTitle = document.getElementById("current-class-display");
+
+function showDropdown(list) {
+    dropdown.innerHTML = "";
+    list.forEach(cls => {
+        const div = document.createElement("div");
+        div.textContent = cls;
+        div.onclick = () => {
+            selectClass(cls);
+        };
+        dropdown.appendChild(div);
+    });
+    dropdown.style.display = list.length ? "block" : "none";
+}
+
+function selectClass(cls) {
+    input.value = ""; // Notīrām inputu pēc izvēles
+    dropdown.style.display = "none";
+    displayTitle.textContent = cls.toUpperCase() + " klase"; // Atjaunojam lielo virsrakstu
+    console.log(cls)
+    UpdateChanges(getChangesForClass(cls))
+    // Šeit izsaucam tavas funkcijas, lai pārlādētu datus
+    if (typeof renderNews === "function") {
+        renderNews(cls); 
+    }
+}
+
+function filterClasses() {
+    const value = input.value.toLowerCase();
+    const filtered = classes.filter(c => c.toLowerCase().includes(value));
+    showDropdown(filtered);
+}
+
+input.addEventListener("input", filterClasses);
+input.addEventListener("focus", () => showDropdown(classes));
+
+// Aizver dropdown, ja noklikšķina citur
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".search-section")) {
+        dropdown.style.display = "none";
+    }
+});

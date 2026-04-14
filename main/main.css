@@ -1,40 +1,132 @@
+/* =========================
+   GLOBAL RESET
+========================= */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #1e1f22;
   color: #dbdee1;
+  -webkit-font-smoothing: antialiased;
 }
 
-.table-wrapper {
-  width: 100%;
-  overflow-x: auto;
-}
-
-#diaryTable {
-  width: 100%;
+/* =========================
+   GLOBAL INFO
+========================= */
+.class-info {
   max-width: 900px;
-  margin: 20px auto;
-  border-collapse: collapse;
+  margin: 10px auto 6px auto;
+  padding: 10px 12px;
+
   background: #2b2d31;
   border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  border-left: 3px solid #5865f2;
+
+  font-size: 12px;
+  line-height: 1.35;
+
+  animation: fadeIn 0.2s ease;
 }
 
-#diaryTable td {
-  padding: 10px 12px;
-  border-bottom: 1px solid #1f2124;
-  font-size: 13px;
-  line-height: 1.3;
-  vertical-align: middle;
-  color: #dbdee1;
+/* title */
+.class-info strong {
+  font-size: 14px;
+  display: block;
+  margin-bottom: 6px;
+  color: #ffffff;
 }
 
-#diaryTable tr:hover {
-  background: #313338;
+/* paragraphs */
+.class-info p {
+  margin: 4px 0;
+  color: #dbdee1 !important;
+}
+
+/* list */
+.class-info ul {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.class-info li {
+  background: #1f2124;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+
   transition: 0.15s ease;
 }
 
+.class-info li:hover {
+  background: #2a2d33;
+}
+
+/* fix inline garbage styles */
+.class-info span,
+.class-info li,
+.class-info p {
+  color: #dbdee1 !important;
+}
+
+/* small italic note */
+.class-info p[style*="italic"] {
+  font-size: 11px;
+  color: #949ba4 !important;
+  margin-top: 8px;
+}
+
+/* =========================
+   TABLE
+========================= */
+#diaryTable {
+  width: 100%;
+  max-width: 900px;
+  margin: 15px auto 25px auto;
+
+  border-collapse: collapse;
+  background: #2b2d31;
+
+  border-radius: 10px;
+  overflow: hidden;
+
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  animation: fadeIn 0.25s ease;
+}
+
+/* header */
+#diaryTable thead td {
+  background: #1f2124;
+  font-weight: 700;
+  color: #ffffff;
+
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* cells */
+#diaryTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2124;
+
+  font-size: 13px;
+  line-height: 1.3;
+  vertical-align: middle;
+
+  transition: background 0.15s ease;
+}
+
+/* hover */
+#diaryTable tr:hover td {
+  background: #313338;
+}
+
+/* column alignment */
 #diaryTable td:nth-child(1),
 #diaryTable td:nth-child(5) {
   width: 50px;
@@ -47,17 +139,24 @@ body {
 #diaryTable td:nth-child(3) { width: 25%; }
 #diaryTable td:nth-child(4) { width: 40%; }
 
+/* =========================
+   BUTTONS
+========================= */
 .eklase-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
   background: #5865f2;
   color: #fff;
+
   padding: 6px 12px;
   margin-top: 4px;
+
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
+
   cursor: pointer;
   transition: 0.15s ease;
   text-decoration: none;
@@ -65,12 +164,49 @@ body {
 
 .eklase-btn:hover {
   background: #4752c4;
+  transform: translateY(-1px);
 }
 
 .eklase-btn:active {
   transform: scale(0.97);
 }
 
+/* =========================
+   LINKS
+========================= */
+#diaryTable a:not(.eklase-btn) {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 3px;
+
+  color: #00a8fc;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+#diaryTable a:not(.eklase-btn):hover {
+  background: #2b2d31;
+}
+
+#diaryTable a:not(.eklase-btn):visited {
+  color: #8ab4f8;
+}
+
+/* =========================
+   ATTACHMENTS
+========================= */
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+/* =========================
+   READ MORE
+========================= */
 .more-text {
   display: none;
 }
@@ -88,71 +224,20 @@ body {
   cursor: pointer;
   font-size: 12px;
   margin-left: 5px;
-  text-decoration: none;
 }
 
 .read-more:hover {
   text-decoration: underline;
 }
 
-.attachment-label {
-  display: block;
-  margin-top: 3px;
-  font-size: 12px;
-  color: #949ba4;
-}
-
-#diaryTable a:not(.eklase-btn) {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 6px;
-  margin-top: 3px;
-  color: #00a8fc;
-  text-decoration: none;
-  font-size: 12px;
-}
-
-#diaryTable a:not(.eklase-btn):hover {
-  background: #2b2d31;
-}
-
-#diaryTable a:not(.eklase-btn):visited {
-  color: #8ab4f8;
-}
-
-.attachment-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 600px) {
-  #diaryTable {
-    font-size: 12px;
-  }
-
-  #diaryTable td {
-    padding: 6px;
-  }
-
-  #diaryTable td:nth-child(2),
-  #diaryTable td:nth-child(3),
-  #diaryTable td:nth-child(4) {
-    min-width: 140px;
-  }
-}
-
-.container {
-  display: flex;
-  flex-wrap: wrap;
-}
-
+/* =========================
+   DATE CONTROLS
+========================= */
 .date-controls {
   display: flex;
   align-items: center;
   justify-content: center;
+
   gap: 12px;
   margin-top: 10px;
 }
@@ -160,15 +245,19 @@ body {
 .date-controls button {
   background: #2b2d31;
   color: #fff;
+
   border: 1px solid #444;
   border-radius: 8px;
+
   padding: 6px 10px;
   cursor: pointer;
+
   transition: 0.2s ease;
 }
 
 .date-controls button:hover {
   background: #3a3d44;
+  transform: translateY(-1px);
 }
 
 #date {
@@ -177,4 +266,192 @@ body {
   color: #dbdee1;
   min-width: 120px;
   text-align: center;
+}
+
+/* =========================
+   ANIMATIONS
+========================= */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================
+   MOBILE
+========================= */
+@media (max-width: 600px) {
+  #diaryTable td {
+    padding: 7px;
+    font-size: 12px;
+  }
+
+  #diaryTable td:nth-child(2),
+  #diaryTable td:nth-child(3),
+  #diaryTable td:nth-child(4) {
+    min-width: 140px;
+  }
+
+  .class-info {
+    margin: 8px;
+  }
+}
+/* Headeris: Nosaukums + Search vienā rindā */
+.header-container {
+    max-width: 900px;
+    margin: 20px auto 10px auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+}
+
+#current-class-display {
+    margin: 0;
+    font-size: 24px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+/* Search bar dizains */
+.search-section {
+    position: relative;
+    width: 300px;
+}
+
+.search-wrapper {
+    position: relative;
+}
+
+#classSearch {
+    width: 100%;
+    padding: 10px 15px;
+    background: #2b2d31;
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+    transition: border 0.2s;
+}
+
+#classSearch:focus {
+    border-color: #5865f2;
+}
+
+/* Dropdown (Saraksts, kas izlec) */
+.dropdown-content {
+    display: none;
+    position: absolute;
+    top: 105%;
+    left: 0;
+    right: 0;
+    background: #2b2d31;
+    border: 1px solid #444;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.dropdown-content div {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.dropdown-content div:hover {
+    background: #35373c;
+    color: #5865f2;
+}
+/* =========================
+   REFINED GLOBAL INFO
+   ========================= */
+#global-info-container {
+    max-width: 900px;
+    margin: 8px auto 12px auto;
+    padding: 12px 16px;
+    
+    /* Kompaktāks un caurspīdīgāks fons */
+    background: rgba(43, 45, 49, 0.6); 
+    backdrop-filter: blur(4px); /* Moderns stikla efekts */
+    
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 3px solid #5865f2; /* Diskrēts zils akcents */
+    
+    font-size: 12.5px;
+    color: #b5bac1;
+    line-height: 1.4;
+}
+
+/* Virsraksta josla (Skolā nav... u.c.) */
+#global-info-container strong {
+    color: #fff;
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    display: block;
+    margin-bottom: 6px;
+    opacity: 0.9;
+}
+
+/* Teksta rindkopas */
+#global-info-container p {
+    margin: 2px 0 !important; /* Samazina atstarpi starp teikumiem līdz minimumam */
+    padding: 0 !important;
+}
+
+#global-info-container br {
+    display: none; /* Dažreiz E-klase lieto liekus <br>, šis tos paslēpj */
+}
+/* Saraksti padarīti mazāk uzkrītoši */
+#global-info-container ul {
+    margin: 8px 0;
+    padding: 0;
+}
+
+#global-info-container li {
+    background: rgba(0, 0, 0, 0.15);
+    margin-bottom: 2px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+#global-info-container ul, 
+#global-info-container li {
+    margin: 0 !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+}
+
+/* Punkts pirms saraksta elementa */
+#global-info-container li::before {
+    content: "•";
+    color: #5865f2;
+    margin-right: 8px;
+    font-weight: bold;
+}
+
+/* Krāsu korekcija E-klases iebūvētajiem stiliem */
+#global-info-container span {
+    color: inherit !important; /* Piespiežam izmantot mūsu pelēko, ja vien nav kritiski */
+}
+
+/* Izceļam tikai svarīgākos elementus (laikus, telpas) */
+#global-info-container b, 
+#global-info-container strong {
+    color: #ffffff !important;
+}
+
+/* Paslēpj tukšu konteineru */
+#global-info-container:empty {
+    display: none;
 }
