@@ -26,9 +26,6 @@ async function start() {
     console.log("Browser launched successfully");
 }
 
-if (!browser) {
-    throw new Error("Browser not initialized yet");
-}
 // =========================
 // ROUTES
 // =========================
@@ -170,9 +167,14 @@ app.post("/data", async (req, res) => {
 // START SERVER
 // =========================
 (async () => {
-    await start();
+    try {
+        await start();
 
-    app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
-        console.log("Server running");
-    });
+        app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
+            console.log("Server running");
+        });
+    } catch (err) {
+        console.error("Failed to start browser:", err);
+        process.exit(1);
+    }
 })();
