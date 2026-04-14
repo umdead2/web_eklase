@@ -43,7 +43,11 @@ app.get("/main", (req, res) => {
 app.post("/data", async (req, res) => {
     const { username, password } = req.body;
     const context = await browser.newContext({
-        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        viewport: { width: 1920, height: 1080 }, // Force 1080p Desktop
+        deviceScaleFactor: 1,
+        isMobile: false,
+        hasTouch: false // Essential for e-klase to not trigger mobile mode
     });
 
     const page = await context.newPage();
