@@ -42,94 +42,68 @@ app.get("/main", (req, res) => {
 // =========================
 app.post("/data", async (req, res) => {
     const { username, password } = req.body;
-
     const context = await browser.newContext({
-        userAgent:
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
-        viewport: { width: 1280, height: 720 }
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123 Safari/537.36",
     });
 
     const page = await context.newPage();
-
-    // =========================
-    // HEADER SNIFFER (KEEP)
-    // =========================
     
+    // MOVE THIS HERE: Pipe browser logs to your terminal so you can see why it fails
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+
+    await page.route('**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2}', route => route.abort());
 
     try {
         console.log(`Logging in: ${username}`);
+        await page.goto("https://family.e-klase.lv/", { waitUntil: "commit" });
 
-        await page.goto("https://family.e-klase.lv/", {
-            waitUntil: "domcontentloaded"
-        });
-
-        await page.waitForSelector("#username", { timeout: 30000 });
-
+        await page.waitForSelector("#username");
         await page.fill("#username", username);
         await page.fill("#password", password);
 
-        const authHeadersPromise = new Promise(resolve => {
-            const handler = request => {
-                const url = request.url();
-
-                if (url.includes("/api/diary") || url.includes("/api/news")) {
-                    const headers = request.headers();
-
-                    if (headers.cookie || headers.authorization) {
-                        page.off('request', handler);
-                        resolve(headers);
-                    }
+        // Capture headers
+        const authHeaders = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("Auth timeout")), 15000);
+            page.on('request', request => {
+                const h = request.headers();
+                if (h['authorization']?.startsWith('Bearer') && h['x-profile-id']) {
+                    clearTimeout(timeout);
+                    resolve(h);
                 }
-            };
-
-            page.on('request', handler);
+            });
+            page.click("#login-button").catch(reject);
         });
 
-        await page.click("#login-button");
-
-        const authHeaders = await Promise.race([
-            authHeadersPromise,
-            new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Timeout waiting for auth headers")), 10000)
-            )
-        ]);
-
-        if (!authHeaders) {
-            throw new Error("Failed to capture auth headers");
-        }
-
-        console.log("Auth headers captured");
-
-        // =========================
-        // DATE LOGIC
-        // =========================
         const now = new Date();
         const year = now.getFullYear();
-        const isSecondSemester = (now.getMonth() + 1) < 9;
+        const fromDate = (now.getMonth() + 1) < 9 ? `${year - 1}-09-01` : `${year}-09-01`;
+        const toDate = (now.getMonth() + 1) < 9 ? `${year}-08-31` : `${year + 1}-08-31`;
 
-        const fromDate = isSecondSemester
-            ? `${year - 1}-09-01`
-            : `${year}-09-01`;
-
-        const toDate = isSecondSemester
-            ? `${year}-08-31`
-            : `${year + 1}-08-31`;
-
-        // =========================
-        // DATA FETCH (INSIDE BROWSER SESSION)
-        // =========================
         const data = await page.evaluate(async ({ h, from, to }) => {
-
             const fetchApi = async (url) => {
                 try {
-                    const res = await fetch(url, { headers: h });
-                    return res.ok ? await res.json() : null;
-                } catch {
+                    const res = await fetch(url, { 
+                        headers: {
+                            ...h,
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest"
+                        },
+                        referrer: "https://family.e-klase.lv/home"
+                    });
+                    
+                    if (!res.ok) {
+                        console.error(`Fetch failed (${res.status}) for: ${url}`);
+                        return null;
+                    }
+                    return await res.json();
+                } catch (err) {
+                    console.error(`Fetch error: ${err.message}`);
                     return null;
                 }
             };
 
-            const [diary, tests, summary, news, evalNews] = await Promise.all([
+            // Promise.all returns an array of results in the order they were called
+            const results = await Promise.all([
                 fetchApi(`/api/diary?from=${from}&to=${to}`),
                 fetchApi(`/api/test-schedules`),
                 fetchApi(`/api/evaluations/summary`),
@@ -137,32 +111,26 @@ app.post("/data", async (req, res) => {
                 fetchApi(`/api/evaluation-ratings?includeSameLevelClasses=false&datePeriodModel.from=${from}&datePeriodModel.to=${to}`)
             ]);
 
-            return { diary, tests, summary, news, evalNews };
-
+            return {
+                diary: results[0],
+                tests: results[1],
+                summary: results[2],
+                news: results[3],
+                evalNews: results[4]
+            };
         }, { h: authHeaders, from: fromDate, to: toDate });
 
-        console.log("Data successfully fetched!");
-
-        res.json({
-            success: true,
-            ...data
-        });
+        // FIXED: You were trying to destructure 'data' as an array [diary, tests...] 
+        // but 'evaluate' returns an object { diary, tests... }.
+        res.json({ success: true, date: now, ...data });
 
     } catch (err) {
         console.error("Scraping Error:", err.message);
-
-        const errorText = await page.locator("#error-message").textContent().catch(() => null);
-
-        res.status(500).json({
-            success: false,
-            error: errorText?.trim() || err.message
-        });
-
+        res.status(500).json({ success: false, error: err.message });
     } finally {
         await context.close();
     }
 });
-
 // =========================
 // START SERVER
 // =========================
