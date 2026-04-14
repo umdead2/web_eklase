@@ -8,6 +8,11 @@
     
 </head>
 <body>
+<div class="date-controls">
+    <button onclick="changeDate(-1)">◀</button>
+    <p id="date"></p>
+    <button onclick="changeDate(1)">▶</button>
+</div>
 <table id="diaryTable">
     <tr>
         <td>nr.</td>
@@ -18,11 +23,7 @@
     </tr>
 </table>
 
-<div class="date-controls">
-    <button onclick="changeDate(-1)">◀</button>
-    <p id="date"></p>
-    <button onclick="changeDate(1)">▶</button>
-</div>
+
 <script src="main.js"></script>
 </body>
 </html>

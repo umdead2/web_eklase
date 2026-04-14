@@ -1,103 +1,66 @@
-/* =========================
-   DISCORD-STYLE UI THEME
-========================= */
-
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-
-  background: #1e1f22; /* Discord dark */
+  background: #1e1f22;
   color: #dbdee1;
 }
 
-/* wrapper */
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
 }
 
-/* =========================
-   TABLE
-========================= */
 #diaryTable {
   width: 100%;
   max-width: 900px;
   margin: 20px auto;
-
   border-collapse: collapse;
-  background: #2b2d31; /* Discord panel */
-
+  background: #2b2d31;
   border-radius: 10px;
   overflow: hidden;
-
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 
-/* =========================
-   CELLS
-========================= */
 #diaryTable td {
   padding: 10px 12px;
-
   border-bottom: 1px solid #1f2124;
-
   font-size: 13px;
   line-height: 1.3;
-  vertical-align: top;
-
+  vertical-align: middle;
   color: #dbdee1;
 }
 
-/* hover like Discord message highlight */
 #diaryTable tr:hover {
   background: #313338;
   transition: 0.15s ease;
 }
 
-/* =========================
-   FIRST / LAST COLUMN
-========================= */
 #diaryTable td:nth-child(1),
 #diaryTable td:nth-child(5) {
   width: 50px;
   text-align: center;
-
   font-weight: 600;
   color: #a3a6aa;
 }
 
-/* column widths */
 #diaryTable td:nth-child(2) { width: 25%; }
 #diaryTable td:nth-child(3) { width: 25%; }
 #diaryTable td:nth-child(4) { width: 40%; }
 
-/* =========================
-   BUTTON (DISCORD STYLE)
-========================= */
 .eklase-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  background: #5865f2; /* Discord blurple */
-  color: white;
-
-  border: none;
-
+  background: #5865f2;
+  color: #fff;
   padding: 6px 12px;
   margin-top: 4px;
-
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
-
   cursor: pointer;
   transition: 0.15s ease;
-
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  text-decoration: none;
 }
 
 .eklase-btn:hover {
@@ -108,9 +71,6 @@ body {
   transform: scale(0.97);
 }
 
-/* =========================
-   READ MORE
-========================= */
 .more-text {
   display: none;
 }
@@ -135,9 +95,6 @@ body {
   text-decoration: underline;
 }
 
-/* =========================
-   ATTACHMENT LABEL
-========================= */
 .attachment-label {
   display: block;
   margin-top: 3px;
@@ -145,9 +102,32 @@ body {
   color: #949ba4;
 }
 
-/* =========================
-   MOBILE
-========================= */
+#diaryTable a:not(.eklase-btn) {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 3px;
+  color: #00a8fc;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+#diaryTable a:not(.eklase-btn):hover {
+  background: #2b2d31;
+}
+
+#diaryTable a:not(.eklase-btn):visited {
+  color: #8ab4f8;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 600px) {
   #diaryTable {
     font-size: 12px;
@@ -173,22 +153,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 12px;
   margin-top: 10px;
 }
 
-/* buttons */
 .date-controls button {
   background: #2b2d31;
   color: #fff;
-
   border: 1px solid #444;
   border-radius: 8px;
-
   padding: 6px 10px;
   cursor: pointer;
-
   transition: 0.2s ease;
 }
 
@@ -196,7 +171,6 @@ body {
   background: #3a3d44;
 }
 
-/* date text */
 #date {
   margin: 0;
   font-size: 14px;

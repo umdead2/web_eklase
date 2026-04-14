@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Login</title>
-  <link rel="stylesheet" href="login.css">
+  <link rel="stylesheet" href="login/login.css">
 </head>
 
 <body>
@@ -86,7 +86,7 @@ function sendData() {
   })
   .then(data => {
     localStorage.setItem("Data", JSON.stringify(data));
-    window.location.href = "/main.html";
+    window.location.href = "main";
   })
   .catch(err => {
     toggleLoading(false);

@@ -1,7 +1,3 @@
-if (process.env.RENDER) {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright';
-}
-
 const express = require("express");
 const { chromium } = require("playwright");
 const path = require("path");
@@ -24,24 +20,24 @@ async function start() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled'
         ]
     });
 
     console.log("Browser launched successfully");
 }
 
-start();
-
+if (!browser) {
+    throw new Error("Browser not initialized yet");
+}
 // =========================
 // ROUTES
 // =========================
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "login.html"));
+    res.sendFile(path.join(__dirname, "login/login.html"));
 });
 
-app.get("/main.html", (req, res) => {
-    res.sendFile(path.join(__dirname, "main.html"));
+app.get("/main", (req, res) => {
+    res.sendFile(path.join(__dirname, "main/main.html"));
 });
 
 // =========================
@@ -58,29 +54,14 @@ app.post("/data", async (req, res) => {
 
     const page = await context.newPage();
 
-    let authHeaders = null;
-
     // =========================
     // HEADER SNIFFER (KEEP)
     // =========================
-    page.on("request", (request) => {
-        const url = request.url();
-
-        if (url.includes("/api/diary") || url.includes("/api/news")) {
-            const headers = request.headers();
-
-            if (!authHeaders && (headers.cookie || headers.authorization)) {
-                authHeaders = headers;
-            }
-        }
-    });
+    
 
     try {
         console.log(`Logging in: ${username}`);
 
-        // =========================
-        // LOGIN (FAST)
-        // =========================
         await page.goto("https://family.e-klase.lv/", {
             waitUntil: "domcontentloaded"
         });
@@ -90,35 +71,34 @@ app.post("/data", async (req, res) => {
         await page.fill("#username", username);
         await page.fill("#password", password);
 
+        const authHeadersPromise = new Promise(resolve => {
+            const handler = request => {
+                const url = request.url();
+
+                if (url.includes("/api/diary") || url.includes("/api/news")) {
+                    const headers = request.headers();
+
+                    if (headers.cookie || headers.authorization) {
+                        page.off('request', handler);
+                        resolve(headers);
+                    }
+                }
+            };
+
+            page.on('request', handler);
+        });
+
         await page.click("#login-button");
 
-        // =========================
-        // FAST STABILIZATION WAIT (IMPORTANT)
-        // =========================
-        await Promise.race([
-            page.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {}),
-            page.waitForTimeout(1500)
+        const authHeaders = await Promise.race([
+            authHeadersPromise,
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Timeout waiting for auth headers")), 10000)
+            )
         ]);
 
-        // small buffer ONLY (no heavy waits)
-        await page.waitForTimeout(800);
-
-        // =========================
-        // FORCE API TRIGGER (LIGHT)
-        // =========================
-        await page.evaluate(() => {
-            fetch("/api/news").catch(() => {});
-        }).catch(() => {});
-
-        // wait for sniffing only
-        await page.waitForTimeout(500);
-
         if (!authHeaders) {
-            await page.waitForTimeout(1200);
-
-            if (!authHeaders) {
-                throw new Error("Failed to capture auth headers");
-            }
+            throw new Error("Failed to capture auth headers");
         }
 
         console.log("Auth headers captured");
@@ -189,6 +169,10 @@ app.post("/data", async (req, res) => {
 // =========================
 // START SERVER
 // =========================
-app.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on port ${port}`);
-});
+(async () => {
+    await start();
+
+    app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
+        console.log("Server running");
+    });
+})();

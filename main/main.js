@@ -43,25 +43,50 @@ function stripHtml(html) {
   return div.textContent || div.innerText || "";
 }
 
-function formatText(text, maxWords = 20) {
-  if (!text) return "--";
+function formatText(html, maxLinks = 1) {
+  if (!html) return "--";
 
-  const clean = stripHtml(text);
-  const words = clean.split(" ");
+  const div = document.createElement("div");
+  div.innerHTML = html;
 
-  if (words.length <= maxWords) return clean;
+  const links = Array.from(div.querySelectorAll("a"));
 
-  const shortText = words.slice(0, maxWords).join(" ");
-  const restText = words.slice(maxWords).join(" ");
+  // If no links → fallback to text trimming
+  if (links.length === 0) {
+    const text = div.textContent.trim();
+    if (text.length <= 150) return text;
+
+    return `
+      <span class="short-text">${text.slice(0, 150)}</span>
+      <span class="dots">...</span>
+      <span class="more-text">${text.slice(150)}</span>
+      <a href="#" class="read-more">Rādīt vairāk</a>
+    `;
+  }
+
+  // Split links into preview + hidden
+  const visibleLinks = links.slice(0, maxLinks);
+  const hiddenLinks = links.slice(maxLinks);
+
+  const renderLinks = (arr) =>
+    arr.map(a => `<a href="${a.href}" target="_blank">${a.href}</a>`).join("<br>");
+
+  // If all links fit → no toggle needed
+  if (hiddenLinks.length === 0) {
+    return renderLinks(visibleLinks);
+  }
 
   return `
-    <span class="short-text">${shortText}</span>
+    <span class="short-text">
+      ${renderLinks(visibleLinks)}
+    </span>
     <span class="dots">...</span>
-    <span class="more-text">${restText}</span>
+    <span class="more-text">
+      ${renderLinks(hiddenLinks)}
+    </span>
     <a href="#" class="read-more">Rādīt vairāk</a>
   `;
 }
-
 
 function changeDate(offset) {
     currentdate += offset;
@@ -128,14 +153,15 @@ function UpdateDiary(date) {
                     const hasAttachment = (homeTask?.attachments?.length || 0) > 0 || (lesson?.thirdPartyEvents?.length|| 0) > 0;
 
                     newCell4.innerHTML = `
-                        ${formatText(hometaskText)}
-                        ${hasAttachment ? `
-                        <br>
-                        Saite vai fails pieejams e-klasē.
-                        <a href="https://family.e-klase.lv/" target="_blank">
-                            <button class="eklase-btn">Atvērt</button>
+                    ${formatText(hometaskText)}
+                    ${hasAttachment ? `
+                        <div class="attachment-row">
+                        <span>Saite vai fails pieejams e-klasē.</span>
+                        <a href="https://family.e-klase.lv/" target="_blank" class="eklase-btn">
+                            Atvērt
                         </a>
-                        ` : ""}
+                        </div>
+                    ` : ""}
                     `;
                     } else {
                         newCell4.innerHTML = "--";
