@@ -285,20 +285,71 @@ body {
 /* =========================
    MOBILE
 ========================= */
+/* =========================
+   REFINED MOBILE UI
+========================= */
 @media (max-width: 600px) {
-  #diaryTable td {
-    padding: 7px;
-    font-size: 12px;
+  /* Header & Search Adjustments */
+  .header-container {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+    margin-top: 10px;
   }
 
-  #diaryTable td:nth-child(2),
-  #diaryTable td:nth-child(3),
-  #diaryTable td:nth-child(4) {
-    min-width: 140px;
+  #current-class-display {
+    font-size: 20px;
   }
 
+  .search-section {
+    width: 100%; /* Search takes full width on mobile */
+  }
+
+  /* Container padding for small screens */
+  #global-info-container, 
   .class-info {
     margin: 8px;
+    padding: 10px;
+  }
+
+  /* TABLE MOBILE FIX: Vertical Scroll */
+  /* This prevents the page from zooming out and keeps the table readable */
+  #diaryTable {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap; /* Keeps text on one line unless cell is narrow */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #diaryTable td {
+    padding: 10px 8px;
+    font-size: 12px;
+    min-width: 100px; /* Ensures columns don't crush */
+  }
+
+  /* Specific column widths for mobile */
+  #diaryTable td:nth-child(1) { min-width: 40px; } /* Index */
+  #diaryTable td:nth-child(2) { min-width: 120px; } /* Subject */
+  #diaryTable td:nth-child(4) { min-width: 180px; } /* Description/Homework */
+
+  /* Date Controls */
+  .date-controls {
+    gap: 8px;
+  }
+  
+  .date-controls button {
+    padding: 8px 12px; /* Bigger tap target for thumbs */
+  }
+
+  #date {
+    font-size: 13px;
+    min-width: 100px;
+  }
+
+  /* Expand attachment buttons for easier clicking */
+  .eklase-btn {
+    width: 100%;
+    margin-bottom: 5px;
   }
 }
 /* Headeris: Nosaukums + Search vienā rindā */

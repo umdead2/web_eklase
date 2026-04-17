@@ -214,40 +214,59 @@ function UpdateDiary(date) {
     });
 }
 
-
 function getChangesForClass(targetClass) {
-    const body = jsonData.news[0]?.body || "";
-    const parts = body.split(/(<strong>\d+\.[a-z]\s*klase<\/strong>)/i);
+    const newsArray = Array.isArray(jsonData.news) ? jsonData.news : jsonData;
+
+    const newsItem = newsArray.find(item => 
+        item.title && item.title.toLowerCase().includes("stundu izmaiņas")
+    );
+
+    const body = newsItem ? newsItem.body : "";
+
+    // Split by ANY bolded class name pattern
+    const parts = body.split(/(<strong>\d+\.[a-z]+\s*klase<\/strong>)/i);
     const globalInfo = parts[0];
 
     if (targetClass === "globalInfo") {
         return globalInfo;
     }
 
-    // Izveidojam drošu meklēšanas shēmu:
-    // ^ sakrīt ar teksta sākumu vai tukšumu pirms tam
-    // \b nodrošina, ka meklējam tieši šo simbolu kombināciju kā atsevišķu vārdu
+    const cleanTarget = targetClass.toLowerCase().trim();
+    
+    // 1. Find the specific index for the class section
+    let classIndex = -1;
+    for (let i = 1; i < parts.length; i += 2) {
+        const sectionHeader = parts[i].replace(/<[^>]*>/g, "").toLowerCase();
+        if (sectionHeader.includes(cleanTarget)) {
+            classIndex = i;
+            break;
+        }
+    }
+
+    // 2. Updated Regex: Matches "10.g", "10.g klase", "10.g klasēm", etc.
+    // It looks for the class name followed by a boundary, space, or common Latvian endings
     const safeSearchTerm = targetClass.replace(".", "\\.");
-    const classRegex = new RegExp("(^|\\s|>)" + safeSearchTerm + "\\s*klase", "i");
+    const classRegex = new RegExp("(^|\\s|>|\\()" + safeSearchTerm + "($|\\s|\\.|,|k)", "i");
 
-    const classIndex = parts.findIndex((p, index) => 
-        index > 0 && classRegex.test(p)
-    );
+    // Check if mentioned in Global Info OR the News Title (sometimes mentioned there)
+    const mentionedInGlobal = classRegex.test(globalInfo) || (newsItem && classRegex.test(newsItem.title));
 
-    const mentionedInGlobal = classRegex.test(globalInfo);
-
+    // 3. Construct Result
     if (classIndex !== -1) {
         let result = parts[classIndex] + parts[classIndex + 1];
+        
         if (mentionedInGlobal) {
-            result += `<p style="margin-top: 10px; font-style: italic; color: #949ba4;">
-                        Skatīt skolas kopējās izmaiņas (norādītas augšā).
+            result += `<p style="margin-top: 10px; font-style: italic; color: #949ba4; border-top: 1px solid #444; padding-top: 8px;">
+                        ℹ️ Skatīt skolas kopējās izmaiņas (norādītas Apakšā).
                        </p>`;
         }
         return result;
     }
 
+    // If only mentioned in global info
     if (mentionedInGlobal) {
-        return `<strong>${targetClass.toUpperCase()} KLASE</strong><br>Skatīt skolas kopējās izmaiņas (norādītas augšā).`;
+        return `<strong>${targetClass.toUpperCase()} KLASE</strong><br>
+                <p style="color: #dbdee1;">Skatīt skolas kopējās izmaiņas (norādītas Apakšā).</p>`;
     }
 
     return "Nav izmaiņu šajai klasei";
@@ -267,7 +286,7 @@ const classes = [
     "7.g", "7.u", "7.l", "7.b", "7.e", "7.n",
     "8.g", "8.u", "8.l", "8.b", "8.e", "8.n",
     "9.g", "9.u", "9.l", "9.b", "9.e", "9.n",
-    "10.g","10.bg", "11.g",
+    "10.g","10.bg", "11.g", "11.bu","12.u","12.b",
 
 ];
 const dropdown = document.getElementById("classDropdown");

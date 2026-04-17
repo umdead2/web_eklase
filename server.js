@@ -44,7 +44,7 @@ app.post("/data", async (req, res) => {
     const { username, password } = req.body;
     const context = await browser.newContext({
         userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        viewport: { width: 1920, height: 1080 }, // Force 1080p Desktop
+        viewport: { width: 1280, height: 720 }, // Force 1080p Desktop
         deviceScaleFactor: 1,
         isMobile: false,
         hasTouch: false // Essential for e-klase to not trigger mobile mode
@@ -141,7 +141,7 @@ app.post("/data", async (req, res) => {
     try {
         await start();
 
-        app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
+        app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
             console.log("Server running");
         });
     } catch (err) {

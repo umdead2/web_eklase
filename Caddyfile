@@ -1,0 +1,3 @@
+webeklase.duckdns.org {
+    reverse_proxy localhost:3000
+}
